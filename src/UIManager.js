@@ -40,6 +40,8 @@ export default class UIManager {
       statWaves: document.getElementById('stat-waves'),
       statTime: document.getElementById('stat-time'),
       statsRestartBtn: document.getElementById('stats-restart-btn'),
+      pauseBtn: document.getElementById('pause-btn'),
+      resumeBtn: document.getElementById('resume-btn'),
     };
     this.minimapCtx = this.els.minimap.getContext('2d');
     this._bannerTimeout = null;

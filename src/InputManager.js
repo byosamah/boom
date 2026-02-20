@@ -11,6 +11,12 @@ export default class InputManager {
     this._raycaster = new THREE.Raycaster();
     this._mouse2 = new THREE.Vector2();
 
+    // Touch bridge (set by Game.js when mobile)
+    this.isMobile = false;
+    this.touchMoveDir = null;
+    this.touchAimPoint = null;
+    this.touchFiring = false;
+
     window.addEventListener('keydown', e => {
       this.keys[e.code] = true;
       if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
@@ -24,6 +30,7 @@ export default class InputManager {
   consumeJustDown() { const v = this.mouseJustDown; this.mouseJustDown = false; return v; }
 
   getAimPoint(camera) {
+    if (this.isMobile && this.touchAimPoint) return this.touchAimPoint;
     this._mouse2.x = (this.mouseX / window.innerWidth) * 2 - 1;
     this._mouse2.y = -(this.mouseY / window.innerHeight) * 2 + 1;
     this._raycaster.setFromCamera(this._mouse2, camera);
@@ -33,6 +40,7 @@ export default class InputManager {
   }
 
   getMoveDir() {
+    if (this.isMobile && this.touchMoveDir) return this.touchMoveDir;
     let x = 0, z = 0;
     if (this.keys['KeyW'] || this.keys['ArrowUp']) z -= 1;
     if (this.keys['KeyS'] || this.keys['ArrowDown']) z += 1;

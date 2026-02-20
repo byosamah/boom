@@ -63,6 +63,9 @@ export default class Game {
     this.shakeDecay = 0;
     this._cameraTarget = new THREE.Vector3();
     this._tempVec = new THREE.Vector3();
+
+    // Mobile support
+    this.touch = null;
   }
 
   async init() {
@@ -177,6 +180,8 @@ export default class Game {
       this._startGame();
     });
 
+    await this._setupMobileSupport();
+
     window.addEventListener('resize', () => this._onResize());
     window.addEventListener('keydown', e => {
       if (e.code === 'Escape') {
@@ -194,6 +199,14 @@ export default class Game {
         this._startGame();
       }
     });
+    // Touch handler for cinematics/menu (instant response, no 300ms delay)
+    window.addEventListener('touchstart', (e) => {
+      if (this.state === 'INTRO_CINEMATIC' || this.state === 'VICTORY_CINEMATIC') {
+        this.cinematic.handleClick();
+      } else if (this.state === 'MENU') {
+        this._startGame();
+      }
+    }, { passive: true });
     this.ui.els.restartBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this._restartGame();
@@ -202,9 +215,38 @@ export default class Game {
       e.stopPropagation();
       this._restartGame();
     });
+    // Mobile pause/resume buttons
+    if (this.ui.els.pauseBtn) {
+      this.ui.els.pauseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.state === 'PLAYING') this._togglePause();
+      });
+    }
+    if (this.ui.els.resumeBtn) {
+      this.ui.els.resumeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.state === 'PAUSED') this._togglePause();
+      });
+    }
 
     this.clock.start();
     this._loop();
+  }
+
+  // === Mobile support ===
+
+  async _setupMobileSupport() {
+    const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 1024;
+    if (!isMobile) return;
+
+    document.body.classList.add('mobile');
+    this.input.isMobile = true;
+
+    const { default: TouchController } = await import('./TouchController.js');
+    this.touch = new TouchController();
+    this.touch.onPause = () => {
+      if (this.state === 'PLAYING') this._togglePause();
+    };
   }
 
   // === Ground creation ===
@@ -771,6 +813,7 @@ export default class Game {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (this.touch) this.touch.resize();
   }
 
   _worldToScreen(pos) {
@@ -1041,12 +1084,21 @@ export default class Game {
     }
     const scaledDt = dt * this.timeScale;
 
+    // Push touch data into InputManager each frame
+    if (this.touch && this.player) {
+      this.input.touchMoveDir = this.touch.getMoveDir();
+      const aim = this.touch.getAimInfo(this.player.position);
+      this.input.touchAimPoint = aim.aimPoint;
+      this.input.touchFiring = aim.firing;
+    }
+
     if (this.state === 'PLAYING') {
       const aimPoint = this.input.getAimPoint(this.camera);
       if (aimPoint) this.player.setAimTarget(aimPoint);
       this.player.update(scaledDt, this.input, this.camera);
 
-      if (this.input.mouseDown) {
+      const firing = this.input.isMobile ? this.input.touchFiring : this.input.mouseDown;
+      if (firing) {
         this._fireWeapon();
       }
 
@@ -1147,5 +1199,7 @@ export default class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
+
+    if (this.touch) this.touch.draw();
   }
 }

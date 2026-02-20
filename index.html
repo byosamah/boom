@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>BOOM - Top Down Shooter</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -16,8 +16,10 @@
 
   <div id="start-screen">
     <h1>BOOM</h1>
-    <p class="controls">WASD move &nbsp;&bull;&nbsp; Click shoot &nbsp;&bull;&nbsp; ESC pause</p>
-    <p class="start-prompt">Click to Start</p>
+    <p class="controls desktop-only">WASD move &nbsp;&bull;&nbsp; Click shoot &nbsp;&bull;&nbsp; ESC pause</p>
+    <p class="controls mobile-only">Left stick move &nbsp;&bull;&nbsp; Right stick aim &amp; fire</p>
+    <p class="start-prompt desktop-only">Click to Start</p>
+    <p class="start-prompt mobile-only">Tap to Start</p>
   </div>
 
   <div id="hud">
@@ -27,10 +29,11 @@
     <div id="health-container"><div id="health-fill"></div></div>
     <div id="weapon-display">Pistol</div>
     <div id="minimap-container"><canvas id="minimap" width="150" height="150"></canvas></div>
+    <button id="pause-btn" class="mobile-only">&#10074;&#10074;</button>
   </div>
 
   <div id="wave-banner"><h2 id="wave-banner-text">Level 1</h2><p class="subtitle" id="wave-banner-sub">Get ready!</p></div>
-  <div class="overlay-screen" id="pause-screen"><h2>PAUSED</h2><p>Press ESC to resume</p></div>
+  <div class="overlay-screen" id="pause-screen"><h2>PAUSED</h2><p class="desktop-only">Press ESC to resume</p><button id="resume-btn" class="mobile-only">Resume</button></div>
   <div class="overlay-screen" id="gameover-screen">
     <h2>GAME OVER</h2>
     <div class="score-display" id="final-score">0</div>
@@ -45,7 +48,7 @@
     <div id="dialogue-box">
       <div id="dialogue-speaker"></div>
       <div id="dialogue-text"></div>
-      <div id="dialogue-continue">Click to continue...</div>
+      <div id="dialogue-continue"><span class="desktop-only">Click to continue...</span><span class="mobile-only">Tap to continue...</span></div>
       <div id="dialogue-choices"></div>
     </div>
   </div>
