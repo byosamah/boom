@@ -1,0 +1,224 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; }
+canvas { display: block; }
+#game-container { position: relative; width: 100%; height: 100%; cursor: default; }
+
+/* Loading Screen */
+#loading-screen {
+  position: absolute; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: #fff;
+}
+#loading-screen h1 {
+  font-size: 80px; font-weight: 900; letter-spacing: 12px;
+  text-shadow: 0 0 40px #e94560, 0 0 80px #e94560;
+  color: #e94560; margin-bottom: 40px;
+}
+.progress-container { width: 400px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #e94560, #ff6b6b); border-radius: 4px; transition: width 0.2s; }
+#loading-text { margin-top: 16px; color: rgba(255,255,255,0.5); font-size: 14px; }
+
+/* Start Screen */
+#start-screen {
+  position: absolute; inset: 0; z-index: 90;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.85); color: #fff;
+}
+#start-screen h1 {
+  font-size: 100px; font-weight: 900; letter-spacing: 16px;
+  background: linear-gradient(180deg, #ff6b6b, #e94560);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 20px;
+}
+#start-screen .controls { color: rgba(255,255,255,0.6); font-size: 16px; margin-bottom: 40px; }
+#start-screen .start-prompt { color: #e94560; font-size: 22px; animation: blink 1.2s infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* HUD */
+#hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: none; }
+#score {
+  position: absolute; top: 20px; left: 24px;
+  font-size: 28px; font-weight: 700; color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+}
+#multiplier {
+  position: absolute; top: 52px; left: 24px;
+  font-size: 18px; font-weight: 600; color: #ffcc00;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+  opacity: 0; transition: opacity 0.2s;
+}
+#wave-display {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  font-size: 20px; font-weight: 600; color: rgba(255,255,255,0.8);
+  text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+}
+#health-container {
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  width: 280px; height: 14px; background: rgba(0,0,0,0.6);
+  border-radius: 7px; border: 2px solid rgba(255,255,255,0.15);
+  overflow: hidden;
+}
+#health-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #e94560, #ff6b6b);
+  border-radius: 5px; transition: width 0.3s ease;
+}
+#weapon-display {
+  position: absolute; bottom: 24px; right: 24px;
+  font-size: 16px; font-weight: 600; color: #fff;
+  background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+#minimap-container {
+  position: absolute; top: 16px; right: 16px;
+  border: 2px solid rgba(255,255,255,0.2); border-radius: 8px;
+  overflow: hidden; background: rgba(0,0,0,0.4);
+}
+#minimap { display: block; }
+
+/* Wave Banner */
+#wave-banner {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 20; display: none; text-align: center; pointer-events: none;
+}
+#wave-banner h2 {
+  font-size: 64px; font-weight: 900; color: #fff;
+  text-shadow: 0 0 30px rgba(233,69,96,0.8);
+  animation: bannerIn 0.5s ease-out;
+}
+#wave-banner .subtitle { font-size: 20px; color: rgba(255,255,255,0.6); margin-top: 8px; }
+@keyframes bannerIn { from { transform: scale(2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Pause & Game Over */
+.overlay-screen {
+  position: absolute; inset: 0; z-index: 80;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.8); color: #fff;
+}
+.overlay-screen h2 { font-size: 56px; font-weight: 900; margin-bottom: 16px; }
+.overlay-screen p { font-size: 20px; color: rgba(255,255,255,0.6); margin-bottom: 12px; }
+.overlay-screen .score-display { font-size: 36px; color: #ffcc00; font-weight: 700; margin: 16px 0; }
+#restart-btn {
+  margin-top: 20px; padding: 14px 40px;
+  font-size: 20px; font-weight: 700; color: #fff;
+  background: #e94560; border: none; border-radius: 8px;
+  cursor: pointer; pointer-events: all;
+  transition: transform 0.15s, background 0.15s;
+}
+#restart-btn:hover { transform: scale(1.05); background: #ff6b6b; }
+
+/* Floating Text */
+#floating-texts { position: absolute; inset: 0; z-index: 15; pointer-events: none; overflow: hidden; }
+.float-text {
+  position: absolute; font-weight: 700; white-space: nowrap;
+  animation: floatUp 1s ease-out forwards;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+}
+@keyframes floatUp {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+
+/* Damage Flash */
+#damage-flash {
+  position: absolute; inset: 0; z-index: 5;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(233,69,96,0.4));
+  pointer-events: none; opacity: 0; transition: opacity 0.15s;
+}
+
+/* Dialogue Overlay */
+#dialogue-overlay {
+  position: absolute; inset: 0; z-index: 88;
+  display: none; align-items: flex-end; justify-content: center;
+  padding-bottom: 40px; pointer-events: none;
+}
+#dialogue-box {
+  width: 700px; max-width: 90vw;
+  background: rgba(10, 10, 15, 0.92);
+  border: 2px solid #e94560; border-radius: 12px;
+  padding: 24px 28px; pointer-events: all;
+  backdrop-filter: blur(8px);
+}
+#dialogue-speaker {
+  font-size: 14px; font-weight: 700; color: #e94560;
+  text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;
+}
+#dialogue-text {
+  font-size: 18px; color: #eee; line-height: 1.5; min-height: 54px;
+}
+#dialogue-continue {
+  font-size: 13px; color: rgba(255,255,255,0.4);
+  margin-top: 12px; display: none; animation: blink 1.2s infinite;
+}
+#dialogue-choices {
+  display: none; flex-direction: column; gap: 10px; margin-top: 16px;
+}
+#dialogue-choices .choice-btn {
+  background: rgba(233, 69, 96, 0.15);
+  border: 1px solid rgba(233, 69, 96, 0.5);
+  color: #fff; padding: 12px 20px; border-radius: 8px;
+  font-size: 16px; cursor: pointer; text-align: left;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  pointer-events: all; font-family: inherit;
+}
+#dialogue-choices .choice-btn:hover {
+  background: rgba(233, 69, 96, 0.35);
+  border-color: #e94560; transform: translateX(8px);
+}
+
+/* Fade Overlay */
+#fade-overlay {
+  position: absolute; inset: 0; z-index: 85;
+  background: #000; opacity: 0; pointer-events: none;
+  transition: opacity 0.8s ease;
+}
+#fade-overlay.active { pointer-events: all; }
+
+/* Level Title */
+#level-title {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 86; text-align: center;
+  display: none; pointer-events: none;
+}
+#level-title-number {
+  font-size: 32px; font-weight: 700; color: rgba(255,255,255,0.6);
+  letter-spacing: 6px; text-transform: uppercase; margin-bottom: 8px;
+}
+#level-title-name {
+  font-size: 64px; font-weight: 900; color: #e94560;
+  text-shadow: 0 0 40px rgba(233,69,96,0.6), 0 0 80px rgba(233,69,96,0.3);
+  letter-spacing: 4px;
+}
+
+/* Stats Screen */
+#stats-screen {
+  position: absolute; inset: 0; z-index: 90;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.9); color: #fff;
+}
+#stats-screen h2 {
+  font-size: 48px; font-weight: 900; color: #e94560;
+  text-shadow: 0 0 30px rgba(233,69,96,0.5);
+  margin-bottom: 40px; letter-spacing: 6px;
+}
+#stats-grid {
+  display: grid; grid-template-columns: auto auto;
+  gap: 12px 40px; text-align: left;
+}
+.stat-label {
+  font-size: 14px; color: rgba(255,255,255,0.5);
+  letter-spacing: 2px; font-weight: 600; align-self: center;
+}
+.stat-value {
+  font-size: 36px; font-weight: 900; color: #ffcc00;
+  text-shadow: 0 0 20px rgba(255,204,0,0.3);
+}
+#stats-restart-btn {
+  margin-top: 40px; padding: 14px 40px;
+  font-size: 20px; font-weight: 700; color: #fff;
+  background: #e94560; border: none; border-radius: 8px;
+  cursor: pointer; transition: transform 0.15s, background 0.15s;
+}
+#stats-restart-btn:hover { transform: scale(1.05); background: #ff6b6b; }

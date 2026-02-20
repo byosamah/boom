@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOOM - Top Down Shooter</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="game-container">
+  <div id="loading-screen">
+    <h1>BOOM</h1>
+    <div class="progress-container"><div class="progress-fill" id="progress-fill"></div></div>
+    <p id="loading-text">Loading assets...</p>
+  </div>
+
+  <div id="start-screen">
+    <h1>BOOM</h1>
+    <p class="controls">WASD move &nbsp;&bull;&nbsp; Click shoot &nbsp;&bull;&nbsp; ESC pause</p>
+    <p class="start-prompt">Click to Start</p>
+  </div>
+
+  <div id="hud">
+    <div id="score">0</div>
+    <div id="multiplier">x1.0</div>
+    <div id="wave-display">Level 1</div>
+    <div id="health-container"><div id="health-fill"></div></div>
+    <div id="weapon-display">Pistol</div>
+    <div id="minimap-container"><canvas id="minimap" width="150" height="150"></canvas></div>
+  </div>
+
+  <div id="wave-banner"><h2 id="wave-banner-text">Level 1</h2><p class="subtitle" id="wave-banner-sub">Get ready!</p></div>
+  <div class="overlay-screen" id="pause-screen"><h2>PAUSED</h2><p>Press ESC to resume</p></div>
+  <div class="overlay-screen" id="gameover-screen">
+    <h2>GAME OVER</h2>
+    <div class="score-display" id="final-score">0</div>
+    <p id="final-wave">Level 1</p>
+    <button id="restart-btn">Play Again</button>
+  </div>
+
+  <div id="floating-texts"></div>
+  <div id="damage-flash"></div>
+
+  <div id="dialogue-overlay">
+    <div id="dialogue-box">
+      <div id="dialogue-speaker"></div>
+      <div id="dialogue-text"></div>
+      <div id="dialogue-continue">Click to continue...</div>
+      <div id="dialogue-choices"></div>
+    </div>
+  </div>
+
+  <div id="fade-overlay"></div>
+  <div id="level-title">
+    <div id="level-title-number"></div>
+    <div id="level-title-name"></div>
+  </div>
+
+  <div id="stats-screen">
+    <h2>MISSION COMPLETE</h2>
+    <div id="stats-grid">
+      <div class="stat-label">FINAL SCORE</div><div class="stat-value" id="stat-score">0</div>
+      <div class="stat-label">ENEMIES ELIMINATED</div><div class="stat-value" id="stat-kills">0</div>
+      <div class="stat-label">LEVELS COMPLETED</div><div class="stat-value" id="stat-waves">0</div>
+      <div class="stat-label">TIME</div><div class="stat-value" id="stat-time">0:00</div>
+    </div>
+    <button id="stats-restart-btn">Play Again</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
