@@ -1087,9 +1087,8 @@ export default class Game {
     // Push touch data into InputManager each frame
     if (this.touch && this.player) {
       this.input.touchMoveDir = this.touch.getMoveDir();
-      const aim = this.touch.getAimInfo(this.player.position);
-      this.input.touchAimPoint = aim.aimPoint;
-      this.input.touchFiring = aim.firing;
+      this.input.touchFiring = this.touch.isFiring();
+      this.input.touchAimPoint = this.touch.getAutoAimPoint(this.player.position, this.enemies);
     }
 
     if (this.state === 'PLAYING') {
