@@ -118,7 +118,9 @@ export default class Enemy {
         c.material.color.setHex(0xffffff);
       }
     });
-    setTimeout(() => {
+    clearTimeout(this._flashTimeout);
+    this._flashTimeout = setTimeout(() => {
+      if (!this.mesh) return;
       this.mesh.traverse(c => {
         if (c.isMesh && c.material && c.userData.origColor !== undefined) {
           c.material.color.setHex(c.userData.origColor);
@@ -141,9 +143,18 @@ export default class Enemy {
   }
 
   dispose(scene) {
+    clearTimeout(this._flashTimeout);
     scene.remove(this.mesh);
     this.mesh.traverse(c => {
-      if (c.isMesh) { c.geometry?.dispose(); }
+      if (c.isMesh) {
+        c.geometry?.dispose();
+        if (Array.isArray(c.material)) {
+          c.material.forEach(m => m.dispose());
+        } else {
+          c.material?.dispose();
+        }
+      }
     });
+    this.mesh = null;
   }
 }

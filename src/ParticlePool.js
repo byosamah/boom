@@ -22,7 +22,7 @@ export default class ParticlePool {
     mesh.material.color.setHex(color);
     mesh.scale.setScalar(scale);
     mesh.visible = true;
-    this.active.push({ mesh, vx, vy, vz, life: lifetime, maxLife: lifetime });
+    this.active.push({ mesh, vx, vy, vz, life: lifetime, maxLife: lifetime, initScale: scale });
   }
 
   burst(x, y, z, color, count = 8, speed = 5, lifetime = 0.5, scale = 1) {
@@ -52,7 +52,7 @@ export default class ParticlePool {
       const alpha = p.life / p.maxLife;
       p.mesh.material.opacity = alpha;
       p.mesh.material.transparent = alpha < 1;
-      p.mesh.scale.setScalar(alpha * (p.mesh.scale.x / Math.max(alpha, 0.01)));
+      p.mesh.scale.setScalar(alpha * p.initScale);
     }
   }
 }

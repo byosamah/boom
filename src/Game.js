@@ -13,10 +13,11 @@ import Projectile from './Projectile.js';
 import ExplodingBarrel from './ExplodingBarrel.js';
 import Pickup from './Pickup.js';
 import CinematicManager from './CinematicManager.js';
+import GameStateMachine from './GameStateMachine.js';
 
 export default class Game {
   constructor() {
-    this.state = 'LOADING';
+    this.fsm = new GameStateMachine();
     this.scene = null;
     this.camera = null;
     this.renderer = null;
@@ -66,12 +67,13 @@ export default class Game {
 
     // Mobile support
     this.touch = null;
+    this.isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 1024;
   }
 
   async init() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.isMobile ? 1.5 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -92,7 +94,8 @@ export default class Game {
     this.dirLight = new THREE.DirectionalLight(0xfff4e6, 1.8);
     this.dirLight.position.set(10, 20, 10);
     this.dirLight.castShadow = true;
-    this.dirLight.shadow.mapSize.set(2048, 2048);
+    const shadowRes = this.isMobile ? 512 : 2048;
+    this.dirLight.shadow.mapSize.set(shadowRes, shadowRes);
     this.dirLight.shadow.camera.left = -35;
     this.dirLight.shadow.camera.right = 35;
     this.dirLight.shadow.camera.top = 35;
@@ -169,41 +172,32 @@ export default class Game {
 
     this._buildArena(ARENA_OBJECTS);
     this.sound.init();
-
-    // Start intro cinematic instead of menu
-    this.state = 'INTRO_CINEMATIC';
-    this.ui.showScreen('cinematic');
-    this.sound.startDialogueMusic();
-    this.cinematic.startDialogue('intro', this.scene, this.assets, this.camera, this.sound, this.ui, () => {
-      this.sound.stopMusic(1500);
-      setTimeout(() => this.sound.startCombatMusic(), 1600);
-      this._startGame();
-    });
+    this._setupFSM();
+    this.fsm.change('INTRO_CINEMATIC', this);
 
     await this._setupMobileSupport();
 
     window.addEventListener('resize', () => this._onResize());
     window.addEventListener('keydown', e => {
       if (e.code === 'Escape') {
-        if (this.state === 'INTRO_CINEMATIC' || this.state === 'VICTORY_CINEMATIC') {
+        if (this.fsm.name === 'INTRO_CINEMATIC' || this.fsm.name === 'VICTORY_CINEMATIC') {
           this.cinematic.skip();
         } else {
           this._togglePause();
         }
       }
     });
-    window.addEventListener('click', (e) => {
-      if (this.state === 'INTRO_CINEMATIC' || this.state === 'VICTORY_CINEMATIC') {
+    window.addEventListener('click', () => {
+      if (this.fsm.name === 'INTRO_CINEMATIC' || this.fsm.name === 'VICTORY_CINEMATIC') {
         this.cinematic.handleClick();
-      } else if (this.state === 'MENU') {
+      } else if (this.fsm.name === 'MENU') {
         this._startGame();
       }
     });
-    // Touch handler for cinematics/menu (instant response, no 300ms delay)
-    window.addEventListener('touchstart', (e) => {
-      if (this.state === 'INTRO_CINEMATIC' || this.state === 'VICTORY_CINEMATIC') {
+    window.addEventListener('touchstart', () => {
+      if (this.fsm.name === 'INTRO_CINEMATIC' || this.fsm.name === 'VICTORY_CINEMATIC') {
         this.cinematic.handleClick();
-      } else if (this.state === 'MENU') {
+      } else if (this.fsm.name === 'MENU') {
         this._startGame();
       }
     }, { passive: true });
@@ -219,13 +213,13 @@ export default class Game {
     if (this.ui.els.pauseBtn) {
       this.ui.els.pauseBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (this.state === 'PLAYING') this._togglePause();
+        if (this.fsm.name === 'PLAYING') this._togglePause();
       });
     }
     if (this.ui.els.resumeBtn) {
       this.ui.els.resumeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (this.state === 'PAUSED') this._togglePause();
+        if (this.fsm.name === 'PAUSED') this._togglePause();
       });
     }
 
@@ -236,8 +230,7 @@ export default class Game {
   // === Mobile support ===
 
   async _setupMobileSupport() {
-    const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 1024;
-    if (!isMobile) return;
+    if (!this.isMobile) return;
 
     document.body.classList.add('mobile');
     this.input.isMobile = true;
@@ -245,7 +238,7 @@ export default class Game {
     const { default: TouchController } = await import('./TouchController.js');
     this.touch = new TouchController();
     this.touch.onPause = () => {
-      if (this.state === 'PLAYING') this._togglePause();
+      if (this.fsm.name === 'PLAYING') this._togglePause();
     };
   }
 
@@ -257,7 +250,7 @@ export default class Game {
   }
 
   _createUrbanGround() {
-    const S = 2048;
+    const S = this.isMobile ? 1024 : 2048;
     const PPU = 32;
     const CX = S / 2, CY = S / 2;
     const canvas = document.createElement('canvas');
@@ -417,7 +410,7 @@ export default class Game {
   }
 
   _createDesertGround() {
-    const S = 2048;
+    const S = this.isMobile ? 1024 : 2048;
     const canvas = document.createElement('canvas');
     canvas.width = S; canvas.height = S;
     const ctx = canvas.getContext('2d');
@@ -587,14 +580,66 @@ export default class Game {
       this.coverColliders.push({ position: new THREE.Vector3(pos[0], 0, pos[2]), radius: CONFIG.BARREL_RADIUS });
     }
 
+    // Group decor by model key for instancing
+    const decorGroups = {};
     for (const obj of arenaObjects.decor) {
       const key = modelMap[obj.m];
       if (!key) continue;
-      const model = this.assets.cloneStatic(key);
-      if (!model) continue;
-      model.position.set(obj.p[0], obj.p[1] || 0, obj.p[2]);
-      this.scene.add(model);
-      this.arenaMeshes.push(model);
+      if (!decorGroups[key]) decorGroups[key] = [];
+      decorGroups[key].push(obj);
+    }
+
+    for (const [key, placements] of Object.entries(decorGroups)) {
+      if (placements.length <= 2) {
+        for (const obj of placements) {
+          const model = this.assets.cloneStatic(key);
+          if (!model) continue;
+          model.position.set(obj.p[0], obj.p[1] || 0, obj.p[2]);
+          this.scene.add(model);
+          this.arenaMeshes.push(model);
+        }
+        continue;
+      }
+      this._placeInstanced(key, placements);
+    }
+  }
+
+  _placeInstanced(key, placements) {
+    const reference = this.assets.cloneStatic(key);
+    if (!reference) return;
+
+    reference.updateMatrixWorld(true);
+    const refInverse = new THREE.Matrix4().copy(reference.matrixWorld).invert();
+
+    const meshInfos = [];
+    reference.traverse(c => {
+      if (c.isMesh) {
+        const localMatrix = new THREE.Matrix4().multiplyMatrices(refInverse, c.matrixWorld);
+        meshInfos.push({ geometry: c.geometry, material: c.material, localMatrix });
+      }
+    });
+
+    const count = placements.length;
+    const dummy = new THREE.Object3D();
+
+    for (const { geometry, material, localMatrix } of meshInfos) {
+      const instMesh = new THREE.InstancedMesh(geometry, material, count);
+      instMesh.castShadow = true;
+      instMesh.receiveShadow = true;
+
+      for (let i = 0; i < count; i++) {
+        const obj = placements[i];
+        dummy.position.set(obj.p[0], obj.p[1] || 0, obj.p[2]);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        const mat = new THREE.Matrix4().multiplyMatrices(dummy.matrix, localMatrix);
+        instMesh.setMatrixAt(i, mat);
+      }
+
+      instMesh.instanceMatrix.needsUpdate = true;
+      this.scene.add(instMesh);
+      this.arenaMeshes.push(instMesh);
     }
   }
 
@@ -658,8 +703,7 @@ export default class Game {
     this.waveManager.wave = 0;
     this.waveManager.startBreak();
     this.waveManager.breakTimer = 2;
-    this.state = 'PLAYING';
-    this.ui.showScreen('playing');
+    this.fsm.change('PLAYING', this);
     this.ui.showWaveBanner(1, 'Urban Warfare');
     this._spawnPickups();
 
@@ -714,98 +758,26 @@ export default class Game {
     this.totalKills = 0;
     this.score = 0;
 
-    // Restart with intro cinematic
-    this.state = 'INTRO_CINEMATIC';
-    this.ui.showScreen('cinematic');
-    this.sound.startDialogueMusic();
-    this.cinematic.startDialogue('intro', this.scene, this.assets, this.camera, this.sound, this.ui, () => {
-      this.sound.stopMusic(1500);
-      setTimeout(() => this.sound.startCombatMusic(), 1600);
-      this._startGame();
-    });
+    this.fsm.change('INTRO_CINEMATIC', this);
   }
 
   _startLevelTransition() {
-    this.state = 'LEVEL_TRANSITION';
-    this.sound.stopMusic(1000);
-
-    if (this.player) {
-      this.scene.remove(this.player.mesh);
-      this.player = null;
-    }
-
-    this.cinematic.startLevelTransition(this.ui, this.sound,
-      // midCallback — screen is black, swap arena
-      () => {
-        this._clearArena();
-        this.currentLevel = 2;
-        const config = LEVEL_CONFIGS[2];
-        this._applyLevelConfig(config);
-        this._createGround('desert');
-        this._createWalls();
-        this._buildArena(config.arenaObjects);
-      },
-      // doneCallback — fade-in complete, resume play
-      () => {
-        this.player = new Player(this.scene, this.assets);
-        this.waveManager.wave = 1;
-        this.waveManager.startBreak();
-        this.waveManager.breakTimer = 3;
-        this.sound.startCombatMusic();
-        this.state = 'PLAYING';
-        this.ui.showScreen('playing');
-        this.ui.showWaveBanner(2, 'Desert Storm');
-        this._spawnPickups();
-      }
-    );
+    this.fsm.change('LEVEL_TRANSITION', this);
   }
 
   _startVictoryCinematic() {
-    this.state = 'VICTORY_CINEMATIC';
-    this.sound.stopMusic(1000);
-    this.sound.victory();
-    setTimeout(() => this.sound.startDialogueMusic(), 1200);
-
-    for (const e of this.enemies) e.dispose(this.scene);
-    this.enemies = [];
-    for (const p of this.projectiles) p.dispose(this.scene);
-    this.projectiles = [];
-    for (const pk of this.pickups) pk.dispose(this.scene);
-    this.pickups = [];
-    if (this.player) {
-      this.scene.remove(this.player.mesh);
-      this.player = null;
-    }
-
-    this.ui.showScreen('cinematic');
-    this.cinematic.startDialogue('victory', this.scene, this.assets, this.camera, this.sound, this.ui, () => {
-      this._showStatsScreen();
-    });
+    this.fsm.change('VICTORY_CINEMATIC', this);
   }
 
   _showStatsScreen() {
-    this.state = 'STATS';
-    this.ui.showScreen('stats');
-    const elapsed = performance.now() / 1000 - this.gameStartTime;
-    this.ui.showStatsScreen({
-      score: this.score,
-      kills: this.totalKills,
-      waves: 2,
-      time: elapsed,
-    });
+    this.fsm.change('STATS', this);
   }
 
   _togglePause() {
-    if (this.state === 'PLAYING') {
-      this.state = 'PAUSED';
-      this.ui.showScreen('paused');
-      this.sound.pauseMusic();
-      this.clock.stop();
-    } else if (this.state === 'PAUSED') {
-      this.state = 'PLAYING';
-      this.ui.showScreen('playing');
-      this.sound.resumeMusic();
-      this.clock.start();
+    if (this.fsm.name === 'PLAYING') {
+      this.fsm.change('PAUSED', this);
+    } else if (this.fsm.name === 'PAUSED') {
+      this.fsm.change('PLAYING', this);
     }
   }
 
@@ -1041,14 +1013,149 @@ export default class Game {
   }
 
   _onPlayerDeath() {
-    this.state = 'GAME_OVER';
-    this.sound.stopMusic(500);
-    this._shake(0.5);
-    this.particles.burst(this.player.position.x, 0.5, this.player.position.z, 0xff0000, 15, 6, 0.8, 2);
-    this.ui.flashDamage();
-    setTimeout(() => {
-      this.ui.showGameOver(this.score, this.currentLevel);
-    }, 300);
+    this.fsm.change('GAME_OVER', this);
+  }
+
+  // === FSM setup ===
+
+  _setupFSM() {
+    this.fsm.add('LOADING', {
+      update() {}
+    });
+
+    this.fsm.add('INTRO_CINEMATIC', {
+      enter(game) {
+        game.ui.showScreen('cinematic');
+        game.sound.startDialogueMusic();
+        game.cinematic.startDialogue('intro', game.scene, game.assets, game.camera, game.sound, game.ui, () => {
+          game.sound.stopMusic(1500);
+          setTimeout(() => game.sound.startCombatMusic(), 1600);
+          game._startGame();
+        });
+      },
+      update(game, dt) {
+        game.cinematic.update(dt);
+        game.renderer.render(game.scene, game.camera);
+      }
+    });
+
+    this.fsm.add('PLAYING', {
+      enter(game) {
+        game.ui.showScreen('playing');
+      },
+      update(game, dt) {
+        game._updatePlaying(dt);
+      }
+    });
+
+    this.fsm.add('PAUSED', {
+      enter(game) {
+        game.ui.showScreen('paused');
+        game.sound.pauseMusic();
+        game.clock.stop();
+      },
+      update(game) {
+        game.renderer.render(game.scene, game.camera);
+      },
+      exit(game) {
+        game.sound.resumeMusic();
+        game.clock.start();
+      }
+    });
+
+    this.fsm.add('LEVEL_TRANSITION', {
+      enter(game) {
+        game.sound.stopMusic(1000);
+        if (game.player) {
+          game.scene.remove(game.player.mesh);
+          game.player = null;
+        }
+        game.cinematic.startLevelTransition(game.ui, game.sound,
+          () => {
+            game._clearArena();
+            game.currentLevel = 2;
+            const config = LEVEL_CONFIGS[2];
+            game._applyLevelConfig(config);
+            game._createGround('desert');
+            game._createWalls();
+            game._buildArena(config.arenaObjects);
+          },
+          () => {
+            game.player = new Player(game.scene, game.assets);
+            game.waveManager.wave = 1;
+            game.waveManager.startBreak();
+            game.waveManager.breakTimer = 3;
+            game.sound.startCombatMusic();
+            game.fsm.change('PLAYING', game);
+            game.ui.showWaveBanner(2, 'Desert Storm');
+            game._spawnPickups();
+          }
+        );
+      },
+      update(game, dt) {
+        game.cinematic.update(dt);
+        game.renderer.render(game.scene, game.camera);
+      }
+    });
+
+    this.fsm.add('VICTORY_CINEMATIC', {
+      enter(game) {
+        game.sound.stopMusic(1000);
+        game.sound.victory();
+        setTimeout(() => game.sound.startDialogueMusic(), 1200);
+
+        for (const e of game.enemies) e.dispose(game.scene);
+        game.enemies = [];
+        for (const p of game.projectiles) p.dispose(game.scene);
+        game.projectiles = [];
+        for (const pk of game.pickups) pk.dispose(game.scene);
+        game.pickups = [];
+        if (game.player) {
+          game.scene.remove(game.player.mesh);
+          game.player = null;
+        }
+
+        game.ui.showScreen('cinematic');
+        game.cinematic.startDialogue('victory', game.scene, game.assets, game.camera, game.sound, game.ui, () => {
+          game._showStatsScreen();
+        });
+      },
+      update(game, dt) {
+        game.cinematic.update(dt);
+        game.renderer.render(game.scene, game.camera);
+      }
+    });
+
+    this.fsm.add('STATS', {
+      enter(game) {
+        game.ui.showScreen('stats');
+        const elapsed = performance.now() / 1000 - game.gameStartTime;
+        game.ui.showStatsScreen({
+          score: game.score,
+          kills: game.totalKills,
+          waves: 2,
+          time: elapsed,
+        });
+      },
+      update(game) {
+        game.renderer.render(game.scene, game.camera);
+      }
+    });
+
+    this.fsm.add('GAME_OVER', {
+      enter(game) {
+        game.sound.stopMusic(500);
+        game._shake(0.5);
+        game.particles.burst(game.player.position.x, 0.5, game.player.position.z, 0xff0000, 15, 6, 0.8, 2);
+        game.ui.flashDamage();
+        setTimeout(() => {
+          game.ui.showGameOver(game.score, game.currentLevel);
+        }, 300);
+      },
+      update(game, dt) {
+        game._updateGameOver(dt);
+      }
+    });
   }
 
   // === Main loop ===
@@ -1060,59 +1167,41 @@ export default class Game {
       requestAnimationFrame(() => this._loop());
     }
 
-    if (this.state === 'LOADING') return;
+    if (this.fsm.name === 'LOADING') return;
+    const dt = Math.min(this.clock.getDelta(), document.hidden ? 0.5 : 0.05);
+    this.fsm.update(this, dt);
+    if (this.touch) this.touch.draw();
+  }
 
-    let dt = Math.min(this.clock.getDelta(), document.hidden ? 0.5 : 0.05);
+  // === State update methods ===
 
-    // Cinematic states — update cinematic + render
-    if (this.state === 'INTRO_CINEMATIC' || this.state === 'VICTORY_CINEMATIC' || this.state === 'LEVEL_TRANSITION') {
-      this.cinematic.update(dt);
-      this.renderer.render(this.scene, this.camera);
-      return;
-    }
-
-    // Non-gameplay states (MENU, PAUSED, STATS)
-    if (this.state !== 'PLAYING' && this.state !== 'GAME_OVER') {
-      this.renderer.render(this.scene, this.camera);
-      return;
-    }
-
-    // === GAMEPLAY ===
+  _updatePlaying(dt) {
     if (this.slowMoTimer > 0) {
       this.slowMoTimer -= dt;
       if (this.slowMoTimer <= 0) this.timeScale = 1;
     }
     const scaledDt = dt * this.timeScale;
 
-    // Push touch data into InputManager each frame
     if (this.touch && this.player) {
       this.input.touchMoveDir = this.touch.getMoveDir();
       this.input.touchFiring = this.touch.isFiring();
       this.input.touchAimPoint = this.touch.getAutoAimPoint(this.player.position, this.enemies);
     }
 
-    if (this.state === 'PLAYING') {
-      const aimPoint = this.input.getAimPoint(this.camera);
-      if (aimPoint) this.player.setAimTarget(aimPoint);
-      this.player.update(scaledDt, this.input, this.camera);
+    const aimPoint = this.input.getAimPoint(this.camera);
+    if (aimPoint) this.player.setAimTarget(aimPoint);
+    this.player.update(scaledDt, this.input, this.camera);
 
-      const firing = this.input.isMobile ? this.input.touchFiring : this.input.mouseDown;
-      if (firing) {
-        this._fireWeapon();
-      }
+    const firing = this.input.isMobile ? this.input.touchFiring : this.input.mouseDown;
+    if (firing) this._fireWeapon();
 
-      if (this.streakTimer > 0) {
-        this.streakTimer -= scaledDt;
-        if (this.streakTimer <= 0) this.multiplier = 1;
-      }
+    if (this.streakTimer > 0) {
+      this.streakTimer -= scaledDt;
+      if (this.streakTimer <= 0) this.multiplier = 1;
     }
 
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i];
-      if (this.state === 'GAME_OVER') {
-        enemy.anim.update(scaledDt);
-        continue;
-      }
       const remove = enemy.update(scaledDt, this.player.position, this.enemies);
       if (remove) {
         enemy.dispose(this.scene);
@@ -1130,75 +1219,93 @@ export default class Game {
     }
 
     for (const pk of this.pickups) pk.update(scaledDt);
-
     this.particles.update(scaledDt);
+    this._updateCollisions(scaledDt);
 
-    if (this.state === 'PLAYING') {
-      this._updateCollisions(scaledDt);
-    }
-
-    if (this.state === 'PLAYING') {
-      const aliveEnemies = this.enemies.filter(e => !e.dying).length;
-      const result = this.waveManager.update(scaledDt, aliveEnemies);
-
-      switch (result.event) {
-        case 'SPAWN': {
-          const enemy = new Enemy(
-            this.scene, this.assets, result.type,
-            result.position, this.waveManager.getSpeedMultiplier()
-          );
-          this.enemies.push(enemy);
-          break;
+    const aliveEnemies = this.enemies.filter(e => !e.dying).length;
+    const result = this.waveManager.update(scaledDt, aliveEnemies);
+    switch (result.event) {
+      case 'SPAWN': {
+        const enemy = new Enemy(
+          this.scene, this.assets, result.type,
+          result.position, this.waveManager.getSpeedMultiplier()
+        );
+        this.enemies.push(enemy);
+        break;
+      }
+      case 'WAVE_CLEAR': {
+        if (this.currentLevel < 2) {
+          this.ui.showWaveBanner(1, 'Level Complete!');
+          this._startLevelTransition();
+        } else {
+          this.ui.showWaveBanner(2, 'Victory!');
+          this._startVictoryCinematic();
         }
-        case 'WAVE_START': {
-          break;
-        }
-        case 'WAVE_CLEAR': {
-          if (this.currentLevel < 2) {
-            this.ui.showWaveBanner(1, 'Level Complete!');
-            this._startLevelTransition();
-          } else {
-            this.ui.showWaveBanner(2, 'Victory!');
-            this._startVictoryCinematic();
-          }
-          break;
-        }
+        break;
       }
     }
 
-    if (this.player) {
-      this._cameraTarget.set(
-        this.player.position.x + CONFIG.CAMERA_OFFSET[0],
-        CONFIG.CAMERA_OFFSET[1],
-        this.player.position.z + CONFIG.CAMERA_OFFSET[2]
-      );
-      this.camera.position.lerp(this._cameraTarget, CONFIG.CAMERA_LERP);
-      this.camera.lookAt(this.player.position.x, 0, this.player.position.z);
+    this._updateCamera();
+    this._updateHUD();
+    this.renderer.render(this.scene, this.camera);
+  }
 
-      if (this.shakeIntensity > 0) {
-        this.camera.position.x += (Math.random() - 0.5) * this.shakeIntensity;
-        this.camera.position.y += (Math.random() - 0.5) * this.shakeIntensity * 0.5;
-        this.shakeIntensity *= 0.88;
-        if (this.shakeIntensity < 0.01) this.shakeIntensity = 0;
+  _updateGameOver(dt) {
+    if (this.slowMoTimer > 0) {
+      this.slowMoTimer -= dt;
+      if (this.slowMoTimer <= 0) this.timeScale = 1;
+    }
+    const scaledDt = dt * this.timeScale;
+
+    for (const enemy of this.enemies) {
+      enemy.anim.update(scaledDt);
+    }
+
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const proj = this.projectiles[i];
+      proj.update(scaledDt);
+      if (!proj.alive) {
+        proj.dispose(this.scene);
+        this.projectiles.splice(i, 1);
       }
     }
 
-    if (this.player) {
-      this.ui.updateHUD(
-        this.score, this.multiplier,
-        this.currentLevel,
-        this.player.health, this.player.maxHealth,
-        this.player.currentWeapon
-      );
-      this.ui.drawMinimap(this.player, this.enemies, this.pickups, this.barrels);
-    }
+    for (const pk of this.pickups) pk.update(scaledDt);
+    this.particles.update(scaledDt);
+    this._updateCamera();
+    this._updateHUD();
 
-    if (this.state === 'GAME_OVER' && this.player) {
-      this.player.anim.update(dt);
-    }
+    if (this.player) this.player.anim.update(dt);
 
     this.renderer.render(this.scene, this.camera);
+  }
 
-    if (this.touch) this.touch.draw();
+  _updateCamera() {
+    if (!this.player) return;
+    this._cameraTarget.set(
+      this.player.position.x + CONFIG.CAMERA_OFFSET[0],
+      CONFIG.CAMERA_OFFSET[1],
+      this.player.position.z + CONFIG.CAMERA_OFFSET[2]
+    );
+    this.camera.position.lerp(this._cameraTarget, CONFIG.CAMERA_LERP);
+    this.camera.lookAt(this.player.position.x, 0, this.player.position.z);
+
+    if (this.shakeIntensity > 0) {
+      this.camera.position.x += (Math.random() - 0.5) * this.shakeIntensity;
+      this.camera.position.y += (Math.random() - 0.5) * this.shakeIntensity * 0.5;
+      this.shakeIntensity *= 0.88;
+      if (this.shakeIntensity < 0.01) this.shakeIntensity = 0;
+    }
+  }
+
+  _updateHUD() {
+    if (!this.player) return;
+    this.ui.updateHUD(
+      this.score, this.multiplier,
+      this.currentLevel,
+      this.player.health, this.player.maxHealth,
+      this.player.currentWeapon
+    );
+    this.ui.drawMinimap(this.player, this.enemies, this.pickups, this.barrels);
   }
 }
