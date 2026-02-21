@@ -19,6 +19,7 @@ export default class TouchController {
     // Fire button state
     this._fireTouch = null;  // { id }
     this._firing = false;
+    this._firePending = false;
 
     // Output
     this._moveDir = { x: 0, z: 0, moving: false };
@@ -79,6 +80,7 @@ export default class TouchController {
       if (t.clientX >= halfW && this._hitsFireBtn(t.clientX, t.clientY) && !this._fireTouch) {
         this._fireTouch = { id: t.identifier };
         this._firing = true;
+        this._firePending = true;
         continue;
       }
 
@@ -147,7 +149,11 @@ export default class TouchController {
   }
 
   isFiring() {
-    return this._firing;
+    return this._firing || this._firePending;
+  }
+
+  consumeFire() {
+    this._firePending = false;
   }
 
   // Auto-aim: find nearest enemy and return aim point

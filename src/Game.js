@@ -1185,6 +1185,7 @@ export default class Game {
     if (this.touch && this.player) {
       this.input.touchMoveDir = this.touch.getMoveDir();
       this.input.touchFiring = this.touch.isFiring();
+      this.touch.consumeFire();
       this.input.touchAimPoint = this.touch.getAutoAimPoint(this.player.position, this.enemies);
     }
 
