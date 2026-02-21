@@ -44,7 +44,9 @@ boom/
     Pickup.js           ← health/weapon drops (default export)
     WaveManager.js      ← wave progression + module-private SPAWN_FORMATIONS (default export)
     UIManager.js        ← HUD, screens, minimap (default export)
-    Game.js             ← orchestrator, imports everything (~1151 lines) (default export)
+    GameStateMachine.js ← generic FSM engine with enter/update/exit lifecycle (default export)
+    Game.js             ← orchestrator, uses FSM, imports everything (~1310 lines) (default export)
+    TouchController.js  ← mobile virtual joystick + fire button (default export, lazy-loaded)
   assets/
     Characters/glTF/    ← character models
     Environment/glTF/   ← prop models
@@ -53,7 +55,7 @@ boom/
     music/              ← cinematic.mp3, combat.mp3
 ```
 
-17 JS files. One class per file. Default exports for classes, named exports for constants/utils.
+19 JS files. One class per file. Default exports for classes, named exports for constants/utils.
 
 ### Module Dependency DAG (no circular deps)
 
@@ -71,7 +73,9 @@ ExplodingBarrel.js                           ← three, config, utils
 Pickup.js                                    ← three, config
 WaveManager.js                               ← three, config
 UIManager.js                                 ← config
-Game.js                                      ← everything above
+GameStateMachine.js                          ← leaf (no imports)
+TouchController.js                           ← leaf (no imports, lazy-loaded)
+Game.js                                      ← everything above (incl. GameStateMachine)
 main.js                                      ← Game
 ```
 
@@ -99,6 +103,8 @@ main.js                                      ← Game
 | `AssetLoader` | `src/AssetLoader.js` | GLTF loading. `cloneCharacter()` uses `SkeletonUtils.clone()` (clones materials per instance). `cloneStatic()` for props. |
 | `SoundManager` | `src/SoundManager.js` | Web Audio synth for SFX (oscillators + noise buffers). HTML5 Audio for MP3 music with JS fade in/out. Two tracks: cinematic (dialogue) and combat (gameplay). |
 | `InputManager` | `src/InputManager.js` | Keyboard + mouse. `getAimPoint(camera)` raycasts mouse onto ground plane for 360° aim. `mouseDown` fires weapons. WASD/arrows to move. |
+| `GameStateMachine` | `src/GameStateMachine.js` | Generic FSM engine. `add(name, state)` registers states, `change(name, game)` transitions (calls exit/enter), `update(game, dt)` ticks current state. Used by Game for all state management. |
+| `TouchController` | `src/TouchController.js` | Mobile virtual joystick + fire button. Lazy-loaded only on touch devices. Left joystick for movement, right button for auto-aim fire. |
 | `UIManager` | `src/UIManager.js` | HUD + screens. Score, health bar, level banner, minimap (canvas 2D), floating damage text, damage flash. |
 
 ## Game Flow / State Machine
@@ -218,3 +224,7 @@ Assets are available in glTF, FBX, OBJ, and Blend formats. The game only loads *
 - **Music autoplay** — Browsers block autoplay until user gesture. `sound.resume()` called on first click to unlock AudioContext. MP3 playback also requires prior interaction.
 - **Mouse click fires weapons** — `mouseDown` checked every frame in PLAYING state. Cinematic click handler guards on state so no conflict with shooting.
 - **Level transition resets WaveManager** — Wave is set to 1 before Level 2 break starts, so WaveManager increments to wave 2 (more enemies + hazmats via `HAZMAT_START_WAVE=2`).
+- **FSM drives game loop** — `Game._loop()` delegates to `this.fsm.update(this, dt)`. State logic lives in `_setupFSM()`. To add a state: register in `_setupFSM()` with `enter/update/exit`.
+- **InstancedMesh for decor** — Repeated decor props (>2 placements) use `InstancedMesh` via `_placeInstanced()`. Only non-interactive decor is instanced; barrels/cover stay individual for per-object interaction.
+- **Mobile conditional quality** — `this.isMobile` detected in constructor. Shadows 512 vs 2048, ground 1024 vs 2048, DPR 1.5 vs 2. `TouchController` lazy-loaded via dynamic `import()`.
+- **Enemy disposal** — `dispose()` clears flash timeout, disposes geometry + materials (handles arrays), nulls mesh to prevent post-dispose access.
