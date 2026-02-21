@@ -28,6 +28,7 @@ The definitive skill for creating performant Three.js web applications and games
 | **Advanced Rendering** | [advanced-rendering.md](references/advanced-rendering.md) | Post-processing, shaders, env maps, instancing, BatchedMesh |
 | **Reference Frames** | [reference-frame-contract.md](references/reference-frame-contract.md) | Calibration, anchoring, axis correctness, debugging |
 | **Performance** | [performance-guide.md](references/performance-guide.md) | Profiling, LOD, draw calls, mobile optimization, memory |
+| **Game Analytics** | [game-analytics.md](references/game-analytics.md) | Player identity, event tracking, offline sync, behavioral data, KPIs |
 | **Calibration Scripts** | [scripts/README.md](scripts/README.md) | GLTF calibration helper installation and usage |
 
 ---

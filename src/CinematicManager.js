@@ -39,6 +39,10 @@ export default class CinematicManager {
     this.ui = null;
     this.onComplete = null;
 
+    // Analytics tracker (set by Game.js)
+    this.tracker = null;
+    this.cinematicKey = null;
+
     // Level transition
     this.transitioning = false;
     this.transPhase = null;
@@ -51,6 +55,7 @@ export default class CinematicManager {
     this.active = true;
     this.state = 'IDLE';
     this.dialogueData = DIALOGUE[key];
+    this.cinematicKey = key;
     this.nodeIndex = 0;
     this.camera = camera;
     this.scene = scene;
@@ -135,7 +140,16 @@ export default class CinematicManager {
         this.ui.setDialogueSpeaker(node.speaker || 'YOU');
         this.ui.setDialogueText('');
         this.ui.hideDialogueContinue();
+        this._choiceShownAt = Date.now();
         this.ui.showDialogueChoices(node.options, (chosen) => {
+          this.tracker?.track('dialogue_choice', 'CINEMATIC', {
+            cinematic: this.cinematicKey,
+            node_index: this.nodeIndex,
+            choice_text: chosen.text,
+            choice_next: chosen.next,
+            alternatives: node.options.length,
+            time_ms: Date.now() - this._choiceShownAt
+          });
           const idx = this.dialogueData.findIndex(n => n.id === chosen.next);
           this.nodeIndex = idx !== -1 ? idx : this.nodeIndex + 1;
           this._advance();
@@ -198,6 +212,9 @@ export default class CinematicManager {
   skip() {
     if (!this.active && !this.transitioning) return;
     if (this.transitioning) return; // can't skip level transition
+    this.tracker?.track('cinematic_skip', 'CINEMATIC', {
+      cinematic: this.cinematicKey, skipped_at_node: this.nodeIndex
+    });
     this._finish();
   }
 
