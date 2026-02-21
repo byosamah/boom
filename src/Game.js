@@ -172,6 +172,8 @@ export default class Game {
 
     this._buildArena(ARENA_OBJECTS);
     this.sound.init();
+    // Wire analytics tracker to subsystems
+    if (this.tracker) this.cinematic.tracker = this.tracker;
     this._setupFSM();
     this.fsm.change('INTRO_CINEMATIC', this);
 
@@ -865,6 +867,10 @@ export default class Game {
           this.particles.burst(proj.mesh.position.x, 0.8, proj.mesh.position.z, 0xffffff, 4, 3, 0.3);
 
           if (killed) {
+            this.tracker?.track('enemy_kill', 'GAMEPLAY', {
+              enemy_type: enemy.type || 'basic', weapon: this.currentWeaponKey,
+              distance: Math.round(d * 10) / 10, level: this.currentLevel
+            });
             this._onEnemyKilled(enemy);
           }
 
@@ -886,6 +892,7 @@ export default class Game {
           const d = distXZ(proj.mesh.position, barrel.position);
           if (d < CONFIG.PROJECTILE_RADIUS + barrel.radius) {
             barrel.explode(this.scene, this.particles, this.sound, this.enemies, player);
+            this.tracker?.track('barrel_exploded', 'GAMEPLAY', { level: this.currentLevel });
             this._shake(0.4);
             proj.alive = false;
             break;
@@ -900,6 +907,9 @@ export default class Game {
       if (d < CONFIG.PLAYER_RADIUS + enemy.radius) {
         if (enemy.contactCooldown <= 0 && player.contactCooldown <= 0) {
           player.takeDamage(enemy.damage);
+          this.tracker?.track('player_damage', 'GAMEPLAY', {
+            source: 'enemy', damage: enemy.damage, health: player.health, level: this.currentLevel
+          });
           player.contactCooldown = CONFIG.ENEMY_CONTACT_COOLDOWN;
           enemy.contactCooldown = CONFIG.ENEMY_CONTACT_COOLDOWN;
           this.sound.playerHit();
@@ -925,6 +935,9 @@ export default class Game {
       const pk = this.pickups[i];
       const d = distXZ(player.position, pk.position);
       if (d < CONFIG.PICKUP_COLLECT_RADIUS) {
+        this.tracker?.track('pickup_collected', 'GAMEPLAY', {
+          type: pk.type, weapon: pk.weaponKey || null, health: player.health, level: this.currentLevel
+        });
         this.sound.pickup();
         if (pk.type === 'health') {
           player.heal(CONFIG.HEALTH_RESTORE);
@@ -1013,6 +1026,9 @@ export default class Game {
   }
 
   _onPlayerDeath() {
+    this.tracker?.track('player_death', 'GAMEPLAY', {
+      level: this.currentLevel, kills: this.totalKills, score: this.score
+    });
     this.fsm.change('GAME_OVER', this);
   }
 
@@ -1025,6 +1041,7 @@ export default class Game {
 
     this.fsm.add('INTRO_CINEMATIC', {
       enter(game) {
+        game.tracker?.track('cinematic_start', 'CINEMATIC', { cinematic: 'intro' });
         game.ui.showScreen('cinematic');
         game.sound.startDialogueMusic();
         game.cinematic.startDialogue('intro', game.scene, game.assets, game.camera, game.sound, game.ui, () => {
@@ -1041,6 +1058,9 @@ export default class Game {
 
     this.fsm.add('PLAYING', {
       enter(game) {
+        game.tracker?.track('level_start', 'GAMEPLAY', {
+          level: game.currentLevel, weapon: game.player?.currentWeapon, health: game.player?.health
+        });
         game.ui.showScreen('playing');
       },
       update(game, dt) {
@@ -1050,6 +1070,7 @@ export default class Game {
 
     this.fsm.add('PAUSED', {
       enter(game) {
+        game.tracker?.track('session_pause', 'SESSION', { level: game.currentLevel });
         game.ui.showScreen('paused');
         game.sound.pauseMusic();
         game.clock.stop();
@@ -1058,6 +1079,7 @@ export default class Game {
         game.renderer.render(game.scene, game.camera);
       },
       exit(game) {
+        game.tracker?.track('session_resume', 'SESSION', { level: game.currentLevel });
         game.sound.resumeMusic();
         game.clock.start();
       }
@@ -1065,6 +1087,9 @@ export default class Game {
 
     this.fsm.add('LEVEL_TRANSITION', {
       enter(game) {
+        game.tracker?.track('level_complete', 'GAMEPLAY', {
+          level: game.currentLevel, score: game.score, kills: game.totalKills
+        });
         game.sound.stopMusic(1000);
         if (game.player) {
           game.scene.remove(game.player.mesh);
@@ -1100,6 +1125,9 @@ export default class Game {
 
     this.fsm.add('VICTORY_CINEMATIC', {
       enter(game) {
+        game.tracker?.track('level_complete', 'GAMEPLAY', {
+          level: 2, score: game.score, kills: game.totalKills, victory: true
+        });
         game.sound.stopMusic(1000);
         game.sound.victory();
         setTimeout(() => game.sound.startDialogueMusic(), 1200);
@@ -1128,8 +1156,15 @@ export default class Game {
 
     this.fsm.add('STATS', {
       enter(game) {
-        game.ui.showScreen('stats');
         const elapsed = performance.now() / 1000 - game.gameStartTime;
+        game.tracker?.track('mission_complete', 'SESSION', {
+          score: game.score, kills: game.totalKills, levels: 2, playtime_s: Math.round(elapsed)
+        });
+        game.tracker?.saveProgress({
+          current_level: 2, highest_level: 2, score: game.score,
+          kills: game.totalKills, completed: true
+        });
+        game.ui.showScreen('stats');
         game.ui.showStatsScreen({
           score: game.score,
           kills: game.totalKills,
@@ -1144,6 +1179,14 @@ export default class Game {
 
     this.fsm.add('GAME_OVER', {
       enter(game) {
+        const elapsed = performance.now() / 1000 - game.gameStartTime;
+        game.tracker?.track('game_over', 'GAMEPLAY', {
+          level: game.currentLevel, score: game.score, kills: game.totalKills, playtime_s: Math.round(elapsed)
+        });
+        game.tracker?.saveProgress({
+          current_level: game.currentLevel, score: game.score,
+          kills: game.totalKills, completed: false
+        });
         game.sound.stopMusic(500);
         game._shake(0.5);
         game.particles.burst(game.player.position.x, 0.5, game.player.position.z, 0xff0000, 15, 6, 0.8, 2);
@@ -1235,6 +1278,9 @@ export default class Game {
         break;
       }
       case 'WAVE_CLEAR': {
+        this.tracker?.track('wave_clear', 'GAMEPLAY', {
+          level: this.currentLevel, kills: this.totalKills, score: this.score
+        });
         if (this.currentLevel < 2) {
           this.ui.showWaveBanner(1, 'Level Complete!');
           this._startLevelTransition();

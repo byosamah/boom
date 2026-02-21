@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><title>BOOM Analytics Data Check</title></head>
+<body style="background:#1a1a2e;color:#fff;font-family:monospace;padding:20px;line-height:1.6">
+<h2 style="color:#e94560">BOOM Analytics Data Check</h2>
+<p style="color:rgba(255,255,255,0.5)">This reads localStorage from the same origin as the game (localhost:8080)</p>
+<hr style="border-color:rgba(255,255,255,0.1)">
+<pre id="output" style="white-space:pre-wrap;font-size:13px">Loading...</pre>
+<script>
+const out = document.getElementById('output');
+let text = '';
+
+// Player identity
+const player = localStorage.getItem('game_player');
+text += '=== PLAYER IDENTITY ===\n';
+if (player) {
+  text += JSON.stringify(JSON.parse(player), null, 2) + '\n';
+} else {
+  text += '(none — play the game first)\n';
+}
+
+// Events
+const events = localStorage.getItem('events_boom');
+text += '\n=== EVENTS (events_boom) ===\n';
+if (events) {
+  const arr = JSON.parse(events);
+  text += 'Total: ' + arr.length + ' events\n';
+  text += 'Session: ' + (arr[0]?.session || '?') + '\n\n';
+  arr.forEach(e => {
+    const data = JSON.stringify(e.data);
+    text += `  [${String(e.seq).padStart(3,'0')}] ${e.t.padEnd(20)} ${e.cat.padEnd(12)} ${data}\n`;
+  });
+} else {
+  text += '(none — play the game first)\n';
+}
+
+// Progress
+const progress = localStorage.getItem('boom_progress');
+text += '\n=== PROGRESS (boom_progress) ===\n';
+if (progress) {
+  text += JSON.stringify(JSON.parse(progress), null, 2) + '\n';
+} else {
+  text += '(none — complete a level or die first)\n';
+}
+
+out.textContent = text;
+</script>
+</body></html>
