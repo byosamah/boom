@@ -2,15 +2,36 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Required Skill
+
+**Always load the `threejs-master` skill** (`.claude/skills/threejs-master/SKILL.md`) at the start of every session. It contains essential Three.js reference guides for scene setup, animations, collision, audio, rendering, and performance. Consult its reference files when working on any Three.js-related code.
+
+## Git Workflow
+
+**NEVER commit directly to `main`.** Always use feature branches. See `.github/CONTRIBUTING.md` for full instructions.
+
+Quick flow:
+```
+git checkout main && git pull upstream main    # sync first
+git checkout -b feature/my-change              # new branch
+# ... make changes, commit ...
+git push origin feature/my-change              # push to YOUR fork
+gh pr create --repo byosamah/boom              # PR to original repo
+```
+
+Remotes: `origin` = your fork (push here), `upstream` = byosamah/boom (pull from here).
+
 ## Project Overview
 
-BOOM is a top-down 3D level-based shooter with cinematic story using Three.js r170 via native ES modules from CDN. No build tools, no bundler, no npm. Modular file structure with one class per file. Features 2 levels (urban + desert), intro/victory cinematics with branching dialogue, 360-degree mouse aiming, and file-based music.
+BOOM is a top-down 3D level-based shooter with cinematic story, being repurposed as an **educational and behavioral assessment game**. Built with Three.js r170 via native ES modules from CDN. No build tools, no bundler, no npm. Features 2 levels (urban + desert), intro/victory cinematics with branching dialogue, 360-degree mouse aiming, and file-based music.
+
+BOOM is the **first game** in a multi-game analytics platform. The analytics layer (sign-in, event tracking, sync) is game-agnostic and reusable.
 
 ## Running the Game
 
 ```bash
 # Serve from project root (assets use relative paths)
-cd /Users/osamakhalil/dev/boom
+cd /Users/qusaiabushanap/dev/games/boom
 python3 -m http.server 8080
 
 # Then open http://localhost:8080
@@ -25,11 +46,16 @@ for f in src/*.js; do node --check "$f" && echo "OK: $f" || echo "FAIL: $f"; don
 
 ```
 boom/
+  .claude/
+    skills/
+      threejs-master/   ← Three.js skill (SKILL.md + 13 reference guides + scripts)
   index.html            ← thin shell (~55 lines: HTML + importmap + script tag)
   styles.css            ← all CSS
+  check-data.html       ← analytics data inspector (dev only, same-origin localStorage)
+  SPEC-game-analytics.md ← full spec for the analytics platform
   src/
-    main.js             ← bootstrap (new Game().init(), window._game debug)
-    config.js           ← CONFIG, WEAPON_BONE_NAMES, ARENA_OBJECTS, DESERT_ARENA_OBJECTS, LEVEL_CONFIGS, DIALOGUE (named exports)
+    main.js             ← bootstrap: PlayerManager → EventTracker → SyncManager → Game
+    config.js           ← CONFIG + TRACKING (named exports)
     utils.js            ← distXZ() (named export)
     SoundManager.js     ← Web Audio synth SFX + MP3 music playback (default export)
     AssetLoader.js      ← GLTF loading + SkeletonUtils (default export)
@@ -47,6 +73,10 @@ boom/
     GameStateMachine.js ← generic FSM engine with enter/update/exit lifecycle (default export)
     Game.js             ← orchestrator, uses FSM, imports everything (~1310 lines) (default export)
     TouchController.js  ← mobile virtual joystick + fire button (default export, lazy-loaded)
+    # Analytics layer (3 new files — observer pattern, no game logic modified)
+    PlayerManager.js    ← player identity: browser fingerprint + name prompt + localStorage
+    EventTracker.js     ← universal event bus: buffer → localStorage → server sync
+    SyncManager.js      ← offline-first sync to server API (stub until Phase 2)
   assets/
     Characters/glTF/    ← character models
     Environment/glTF/   ← prop models
@@ -55,7 +85,7 @@ boom/
     music/              ← cinematic.mp3, combat.mp3
 ```
 
-19 JS files. One class per file. Default exports for classes, named exports for constants/utils.
+22 JS files. One class per file. Default exports for classes, named exports for constants/utils.
 
 ### Module Dependency DAG (no circular deps)
 
@@ -75,8 +105,11 @@ WaveManager.js                               ← three, config
 UIManager.js                                 ← config
 GameStateMachine.js                          ← leaf (no imports)
 TouchController.js                           ← leaf (no imports, lazy-loaded)
+PlayerManager.js                             ← leaf (Web Crypto API only)
+EventTracker.js                              ← config (TRACKING)
+SyncManager.js                               ← EventTracker
 Game.js                                      ← everything above (incl. GameStateMachine)
-main.js                                      ← Game
+main.js                                      ← Game, PlayerManager, EventTracker, SyncManager, config
 ```
 
 ### Import Conventions
@@ -191,6 +224,7 @@ Both use 4 categories: `structure` (lane-defining, large colliders), `cover` (ba
 All tunable game constants live in `CONFIG` in `src/config.js`. Weapon stats, enemy types, wave scaling, arena dimensions, camera, scoring — all centralized there.
 
 Additional named exports from `config.js`:
+- `TRACKING` — analytics config: enabled, categories, flush intervals, game ID, version
 - `WEAPON_BONE_NAMES` — skeleton bone names for weapon visibility
 - `ARENA_OBJECTS` — urban arena layout (Level 1)
 - `DESERT_ARENA_OBJECTS` — desert arena layout (Level 2)
@@ -229,3 +263,99 @@ Assets are available in glTF, FBX, OBJ, and Blend formats. The game only loads *
 - **InstancedMesh for decor** — Repeated decor props (>2 placements) use `InstancedMesh` via `_placeInstanced()`. Only non-interactive decor is instanced; barrels/cover stay individual for per-object interaction.
 - **Mobile conditional quality** — `this.isMobile` detected in constructor. Shadows 512 vs 2048, ground 1024 vs 2048, DPR 1.5 vs 2. `TouchController` lazy-loaded via dynamic `import()`.
 - **Enemy disposal** — `dispose()` clears flash timeout, disposes geometry + materials (handles arrays), nulls mesh to prevent post-dispose access.
+- **Analytics uses optional chaining** — All `tracker?.track()` calls use `?.` so the game works perfectly if analytics is removed or tracker is null.
+
+## Analytics System (Behavioral Data Collection)
+
+BOOM collects player behavioral data for educational/assessment purposes. Full spec in `SPEC-game-analytics.md`. Patterns documented in `.claude/skills/threejs-master/references/game-analytics.md`.
+
+### Architecture
+
+```
+PlayerManager (identity) → EventTracker (buffer) → localStorage → SyncManager → Server API
+```
+
+- **Observer pattern** — analytics observes the game, never controls it
+- **Offline-first** — all data saves to localStorage, syncs to server when online
+- **2 SurrealDB tables** — `player` (identity) + `event` (universal log with FLEXIBLE data)
+- **Progress = events** — no separate progress table, reconstructable from event queries
+
+### Analytics Files
+
+| File | Purpose | Key Pattern |
+|------|---------|-------------|
+| `PlayerManager.js` | Browser fingerprint + name prompt + localStorage | SHA-256 via Web Crypto API |
+| `EventTracker.js` | Event bus, in-memory buffer, flush every 5s | `track(type, category, data)` |
+| `SyncManager.js` | Batch sync to server every 30s | Idempotent via client-generated IDs |
+| `check-data.html` | Dev inspector for localStorage data | Must run on same origin |
+
+### Tracked Events (18 types)
+
+| Category | Events |
+|----------|--------|
+| SESSION | `session_start`, `session_end`, `session_pause`, `session_resume`, `mission_complete` |
+| GAMEPLAY | `level_start`, `level_complete`, `wave_clear`, `enemy_kill`, `player_damage`, `player_death`, `pickup_collected`, `barrel_exploded`, `game_over` |
+| CINEMATIC | `cinematic_start`, `dialogue_choice`, `cinematic_skip` |
+| ENGAGEMENT | `tab_hidden`, `tab_visible` |
+
+### localStorage Keys
+
+| Key | Contents |
+|-----|----------|
+| `game_player` | Player identity (name, fingerprint, device meta) |
+| `events_boom` | Array of tracked events (max 5000, ~2MB) |
+| `boom_progress` | Latest game progress snapshot |
+
+### How Tracking Hooks Into Game.js
+
+- FSM state `enter()` hooks emit state events (level_start, game_over, etc.)
+- `_updateCollisions()` emits combat events (enemy_kill, player_damage, pickup_collected)
+- `_onPlayerDeath()` emits player_death before FSM transition
+- `CinematicManager._advance()` tracks dialogue choices with decision timing (`time_ms`)
+- All calls use `this.tracker?.track()` — safe if tracker is null
+
+### Debug Access
+
+From browser console:
+```javascript
+_tracker.getEventCount()                    // Number of events in localStorage
+_tracker.flush()                            // Force flush buffer to localStorage
+JSON.parse(localStorage.getItem('events_boom'))  // Raw event array
+```
+
+Or open `http://localhost:8080/check-data.html` for a formatted view.
+
+## Data Platform Roadmap
+
+```
+Phase 1: Client-Side Foundation              DONE
+  PlayerManager.js, EventTracker.js, SyncManager.js (stub)
+  Events collecting in localStorage, check-data.html working
+
+Phase 2: Backend API                         NEXT
+  server/ directory with FastAPI + SurrealDB
+  POST /api/players (upsert by fingerprint)
+  POST /api/events/batch (bulk event upload)
+  SurrealDB schema: 2 tables (player, event)
+
+Phase 3: Sync Layer
+  Connect SyncManager.js to FastAPI endpoints
+  Offline queue → batch POST when online
+  Idempotent sync via client-generated event IDs
+
+Phase 4: Deployment (Railway)
+  boom-game service (nginx, static files)
+  game-api service (FastAPI + uvicorn)
+  surrealdb service (persistent volume)
+
+Phase 5: KPI Computation
+  scripts/kpi_calculator.py — query events, compute behavioral metrics
+  report table in SurrealDB for computed results
+
+Phase 6: Future
+  Admin dashboard for teachers/trainers
+  Session codes for grouping players by class
+  Cross-device resume with short codes
+  Data export (CSV/JSON)
+  Graph edges: player->played->session
+```

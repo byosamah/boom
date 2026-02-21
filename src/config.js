@@ -54,6 +54,24 @@ export const CONFIG = {
   PARTICLE_POOL_SIZE: 120,
 };
 
+// Analytics tracking configuration
+// Toggle categories on/off to control what gets collected
+export const TRACKING = {
+  enabled: true,                // Master switch — set false to disable all tracking
+  buffer_flush_interval: 5,     // Seconds between localStorage writes
+  sync_interval: 30,            // Seconds between server syncs (Phase 2)
+  max_local_events: 5000,       // Cap to stay within ~2MB localStorage budget
+  game: 'boom',
+  version: '1.0.0',
+  categories: {
+    SESSION: true,              // Game start/end, pause/resume (always recommended)
+    GAMEPLAY: true,             // Kills, damage, pickups, level events
+    CINEMATIC: true,            // Dialogue choices, cinematic skips
+    ENGAGEMENT: true,           // Tab visibility, idle detection
+    POSITION: false,            // Player position every 2s (high volume — off by default)
+  }
+};
+
 export const WEAPON_BONE_NAMES = ['AK','GrenadeLauncher','Knife_1','Knife_2','Pistol','Revolver','Revolver_Small','RocketLauncher','ShortCannon','Shotgun','Shovel','SMG','Sniper','Sniper_2'];
 
 export const ARENA_OBJECTS = {
