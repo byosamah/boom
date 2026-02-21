@@ -8,7 +8,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Git Workflow
 
-Before any git push, check `.github/CONTRIBUTING.md` for the correct workflow. It auto-detects whether you're a contributor (fork) or maintainer (direct push) based on `git remote -v`.
+**NEVER commit directly to `main`.** Always use feature branches. See `.github/CONTRIBUTING.md` for full instructions.
+
+Quick flow:
+```
+git checkout main && git pull upstream main    # sync first
+git checkout -b feature/my-change              # new branch
+# ... make changes, commit ...
+git push origin feature/my-change              # push to YOUR fork
+gh pr create --repo byosamah/boom              # PR to original repo
+```
+
+Remotes: `origin` = your fork (push here), `upstream` = byosamah/boom (pull from here).
 
 ## Project Overview
 
